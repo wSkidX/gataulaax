@@ -1,0 +1,213 @@
+-- blacklist userids (auto leave)
+local blacklist_userids = {
+    [4434546189] = true,
+    [2329879469] = true,
+    [516665441] = true,
+    [3814759052] = true,
+    [4475347268] = true,
+    [7686777574] = true
+}
+
+local function check_and_leave()
+    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+        if blacklist_userids[player.UserId] then
+            pcall(function()
+                game:Shutdown()
+            end)
+            break
+        end
+    end
+end
+
+game:GetService("Players").PlayerAdded:Connect(function()
+    check_and_leave()
+end)
+
+spawn(function()
+    while true do
+        check_and_leave()
+        wait(2)
+    end
+end)
+
+-- configuration
+local main = "jumgcx"
+local dummies = {"rcmly", "ILoveDoingAssHard69", "dummy3"}
+local weapon_priority = {"SP", "SCARL", "Pistol", "Pistol .50", "Combat_P", "Carbine R", "AK47"}
+local slot_keys = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five}
+local platform_pos = Vector3.new(395, 3573, 3202)
+local platform_size = Vector3.new(50, 1, 50)
+local platform_radius = 5
+local main_offset = Vector3.new(0, 3, 10)
+
+-- services
+local players = game:GetService("Players")
+local run_service = game:GetService("RunService")
+local replicated = game.ReplicatedStorage
+local equip_event = replicated:WaitForChild("inventoryShared"):WaitForChild("commEvents"):WaitForChild("inventoryEvents"):WaitForChild("equipped")
+local local_player = players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- utility functions
+local function get_quick_slots()
+    for _, v in next, getgc(true) do
+        if type(v) == "table" and rawget(v, "ItemUsed12345") then
+            local arr = v.ItemUsed12345:get()
+            if type(arr) == "table" then return arr end
+        end
+    end
+end
+
+local function get_char(username)
+    local chars = workspace:FindFirstChild("Characters")
+    if chars then
+        local char = chars:FindFirstChild(username)
+        if char and char:IsA("Model") and char:FindFirstChild("HumanoidRootPart") then
+            return char
+        end
+    end
+    local char = workspace:FindFirstChild(username)
+    if char and char:IsA("Model") and char:FindFirstChild("HumanoidRootPart") then
+        return char
+    end
+end
+
+local function is_on_platform(char)
+    return char and char:FindFirstChild("HumanoidRootPart") and (char.HumanoidRootPart.Position - platform_pos).Magnitude <= platform_radius
+end
+
+local function teleport_to_platform(char, offset)
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char:PivotTo(CFrame.new(platform_pos + (offset or Vector3.new())))
+    end
+end
+
+local function set_safezone_false(username)
+    local plr = players:FindFirstChild(username)
+    if plr and plr:FindFirstChild("Stats") and plr.Stats:FindFirstChild("SafeZone") then
+        plr.Stats.SafeZone.Value = false
+    end
+end
+
+local function create_platform()
+    local part = Instance.new("Part")
+    part.Size = platform_size
+    part.Position = platform_pos
+    part.Anchored = true
+    part.Name = "ScriptPlatform"
+    part.Parent = workspace
+    return part
+end
+
+local function get_body(character)
+    return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+end
+
+-- main logic
+create_platform()
+
+-- teleport main to platform once, only if not already on platform
+local main_char = get_char(main)
+if main_char and not is_on_platform(main_char) then
+    teleport_to_platform(main_char, main_offset)
+end
+
+-- spawn dummies in a row to the right of the platform
+spawn(function()
+    while true do
+        for i, dummy in ipairs(dummies) do
+            local dummy_char = get_char(dummy)
+            local offset = Vector3.new((i-1)*6, 0, 0)
+            if dummy_char and not is_on_platform(dummy_char) then
+                teleport_to_platform(dummy_char, offset)
+            end
+            set_safezone_false(dummy)
+        end
+        set_safezone_false(main)
+        wait(0.1)
+    end
+end)
+
+-- auto equip weapon by priority
+spawn(function()
+    while true do
+        local slots = get_quick_slots()
+        if slots then
+            for _, weapon in ipairs(weapon_priority) do
+                for i = 1, 5 do
+                    if slots[i] == weapon then
+                        equip_event:FireServer(slot_keys[i])
+                        break
+                    end
+                end
+            end
+        end
+        wait(0.5)
+    end
+end)
+
+-- aimbot: targets dummies in rotation, only if not dead (no Highlight)
+local dummy_index = 1
+run_service.RenderStepped:Connect(function()
+    if #dummies == 0 then return end
+    local char = get_char(main)
+    local holding_weapon = false
+    if char then
+        for _, obj in ipairs(char:GetChildren()) do
+            if obj:IsA("Tool") then
+                holding_weapon = true
+                break
+            end
+        end
+    end
+    if not holding_weapon then return end
+    local checked = 0
+    local found = false
+    while checked < #dummies do
+        local target_name = dummies[dummy_index]
+        local target_char = get_char(target_name)
+        local is_dead = false
+        if target_char then
+            if target_char:FindFirstChild("Highlight") then
+                is_dead = true
+            end
+        else
+            is_dead = true
+        end
+        if not is_dead and target_char then
+            local part = get_body(target_char)
+            if part then
+                local cam_pos = camera.CFrame.Position
+                local aim_cframe = CFrame.new(cam_pos, part.Position)
+                camera.CFrame = camera.CFrame:Lerp(aim_cframe, 0.2)
+                found = true
+                break
+            end
+        end
+        dummy_index = dummy_index % #dummies + 1
+        checked = checked + 1
+    end
+    if not found then
+        dummy_index = dummy_index % #dummies + 1
+    end
+end)
+
+-- auto aim and shoot only for main
+spawn(function()
+    local virtual_input = game:GetService("VirtualInputManager")
+    while true do
+        local char = get_char(main)
+        if char then
+            for _, obj in ipairs(char:GetChildren()) do
+                if obj:IsA("Tool") then
+                    virtual_input:SendMouseButtonEvent(0, 0, 1, true, game, 0)
+                    virtual_input:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    wait(0.15)
+                    virtual_input:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    virtual_input:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+                end
+            end
+        end
+        wait(0.1)
+    end
+end)
